@@ -7,33 +7,40 @@
 #
 # You should have received a copy of the license along with this
 # work. If not, see <http://creativecommons.org/licenses/by-nc-sa/4.0/>.
+#
+# Remediation:
+#
+#   https://d1.awsstatic.com/whitepapers/compliance/AWS_CIS_Foundations_Benchmark.pdf
+#
+#   aws logs put-metric-filter \
+#     --region us-east-1 \
+#     --log-group-name CloudTrail/CloudWatchLogGroup \
+#     --filter-name RootAccountUsage \
+#     --filter-pattern '{ $.userIdentity.type = "Root" && $.userIdentity.invokedBy NOT EXISTS && $.eventType != "AwsServiceEvent" }' \
+#     --metric-transformations metricName=RootAccountUsageEventCount,metricNamespace=CloudTrailMetrics,metricValue=1 \
+#
+#   aws cloudwatch put-metric-alarm \
+#     --region us-east-1 \
+#     --alarm-name RootAccountUsageAlarm \
+#     --alarm-description "Triggered by AWS Root Account usage." \
+#     --metric-name RootAccountUsageEventCount \
+#     --namespace CloudTrailMetrics \
+#     --statistic \
+#     --comparison-operator GreaterThanOrEqualToThreshold \
+#     --evaluation-periods 1 \
+#     --period 300 \
+#     --threshold 1 \
+#     --actions-enabled \
+#     --alarm-actions arn:aws:sns:us-east-1:123456789012:CloudWatchAlarmTopic
 
-CHECK_ID_check33="3.3,3.03"
+CHECK_ID_check33="3.3"
 CHECK_TITLE_check33="[check33] Ensure a log metric filter and alarm exist for usage of root account (Scored)"
 CHECK_SCORED_check33="SCORED"
 CHECK_TYPE_check33="LEVEL1"
+CHECK_ASFF_TYPE_check33="Software and Configuration Checks/Industry and Regulatory Standards/CIS AWS Foundations Benchmark"
+CHECK_ASFF_RESOURCE_TYPE_check33="AwsCloudTrailTrail"
 CHECK_ALTERNATE_check303="check33"
 
 check33(){
-  # "Ensure a log metric filter and alarm exist for usage of root account (Scored)"
-  CLOUDWATCH_GROUP=$($AWSCLI cloudtrail describe-trails $PROFILE_OPT --region $REGION --query 'trailList[*].CloudWatchLogsLogGroupArn' --output text | tr '	' '
-' | awk -F: '{ print $7 }')
-  if [[ $CLOUDWATCH_GROUP ]];then
-    for group in $CLOUDWATCH_GROUP; do
-      CLOUDWATCH_LOGGROUP_REGION=$($AWSCLI cloudtrail describe-trails $PROFILE_OPT --region $REGION --query 'trailList[*].CloudWatchLogsLogGroupArn' --output text | awk -F: '{ print $4 }' | head -n 1)
-      METRICFILTER_SET=$($AWSCLI logs describe-metric-filters --log-group-name $group $PROFILE_OPT --region $CLOUDWATCH_LOGGROUP_REGION |grep -E 'userIdentity.*Root.*AwsServiceEvent')
-      if [[ $METRICFILTER_SET ]];then
-        HAS_ALARM_ASSOCIATED=$($AWSCLI cloudwatch describe-alarms $PROFILE_OPT --region $CLOUDWATCH_LOGGROUP_REGION --query 'MetricAlarms[].MetricName' --output text | tr '[:upper:]' '[:lower:]'| grep -Ei 'userIdentity|Root|AwsServiceEvent')
-        if [[ $HAS_ALARM_ASSOCIATED ]];then
-          textPass "CloudWatch group $group found with metric filters and alarms set for usage of root account"
-        else
-          textFail "CloudWatch group $group found with metric filters but no alarms associated"
-        fi
-      else
-        textFail "CloudWatch group $group found but no metric filters or alarms associated"
-      fi
-    done
-  else
-    textFail "No CloudWatch group found for CloudTrail events"
-  fi
+  check3x '\$\.userIdentity\.type\s*=\s*"Root".+\$\.userIdentity\.invokedBy NOT EXISTS.+\$\.eventType\s*!=\s*"AwsServiceEvent"'
 }
